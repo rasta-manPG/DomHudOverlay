@@ -8,4 +8,5 @@ The bars are set in the right position of every point lead by text of procentage
   NOOK
 The text of precentage "%" is dinamically going up and down in relation with the team colour possesion
 The mutator works for any HUDScale setting in user.ini and any resolution player have
+The mutator can be show or hide with a toggle key,example : H=mutate ToggleDOMHUD
 Made by Rasta-man 
