@@ -4,11 +4,11 @@ var DomHUDOverlay ParentMutator;
 var bool bHUDMutatorSet;
 var PlayerPawn OwnerPlayer;
 
-var Mutator LocalNextHUDMutator; 
+var Mutator LocalNextHUDMutator;
 
 replication
 {
-    reliable if ( Role == ROLE_Authority )
+    reliable if (Role == ROLE_Authority)
         ParentMutator, OwnerPlayer;
 }
 
@@ -20,23 +20,33 @@ simulated function Tick(float DeltaTime)
         {
             LocalNextHUDMutator = OwnerPlayer.myHUD.HUDMutator;
             OwnerPlayer.myHUD.HUDMutator = Self;
-            
             bHUDMutatorSet = true;
         }
     }
 }
 
-simulated function PostRender(Canvas Canvas)
+event Destroyed()
 {
-    if (ParentMutator != None)
+    if (OwnerPlayer != None && OwnerPlayer.myHUD != None)
     {
-        ParentMutator.PostRender(Canvas);
+        if (OwnerPlayer.myHUD.HUDMutator == Self)
+            OwnerPlayer.myHUD.HUDMutator = LocalNextHUDMutator;
     }
 
+    LocalNextHUDMutator = None;
+    Super.Destroyed();
+}
+
+simulated function PostRender(Canvas Canvas)
+{
+    if (Canvas == None)
+        return;
+
+    if (ParentMutator != None)
+        ParentMutator.PostRender(Canvas);
+
     if (LocalNextHUDMutator != None)
-    {
         LocalNextHUDMutator.PostRender(Canvas);
-    }
 }
 
 defaultproperties
