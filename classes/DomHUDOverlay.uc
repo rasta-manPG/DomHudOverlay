@@ -1,22 +1,22 @@
 class DomHUDOverlay extends Mutator config(User);
 
 var bool bHUDMutatorSet;
-var bool bShowDOMHUD;
+var config bool bShowDOMHUD;
 var Texture WhiteTex;
 var FontInfo MyFonts;
 
-var ControlPoint CPList[16]; 
+var ControlPoint CPList[16];
 var int NumPoints;
 
 struct TeamPossession {
     var float RedTime;
     var float BlueTime;
 };
-var TeamPossession PointStats[16]; 
+var TeamPossession PointStats[16];
 
 replication
 {
-    reliable if ( Role == ROLE_Authority )
+    reliable if (Role == ROLE_Authority)
         PointStats, CPList, NumPoints, bShowDOMHUD;
 }
 
@@ -64,47 +64,81 @@ function Mutate(string MutateString, PlayerPawn Sender)
 function PostBeginPlay()
 {
     local ControlPoint CP;
+    local int i;
+
     Super.PostBeginPlay();
-    
+
     NumPoints = 0;
+    for (i = 0; i < 16; i++)
+    {
+        CPList[i] = None;
+        PointStats[i].RedTime = 0.0;
+        PointStats[i].BlueTime = 0.0;
+    }
+
     foreach AllActors(class'ControlPoint', CP)
     {
         if (NumPoints < 16)
         {
             CPList[NumPoints] = CP;
+            PointStats[NumPoints].RedTime = 0.0;
+            PointStats[NumPoints].BlueTime = 0.0;
             NumPoints++;
         }
+    }
+}
+
+function ResetPointStats(int Index)
+{
+    if (Index >= 0 && Index < 16)
+    {
+        PointStats[Index].RedTime = 0.0;
+        PointStats[Index].BlueTime = 0.0;
     }
 }
 
 function Tick(float DeltaTime)
 {
     local int i;
+    local int TeamIndex;
+
     if (Level.Game != None && !Level.Game.bGameEnded)
     {
         for (i = 0; i < NumPoints; i++)
         {
-            if (CPList[i] != None && CPList[i].ControllingTeam != None)
+            if (CPList[i] == None)
             {
-                if (CPList[i].ControllingTeam.TeamIndex == 0) PointStats[i].RedTime += DeltaTime;
-                else if (CPList[i].ControllingTeam.TeamIndex == 1) PointStats[i].BlueTime += DeltaTime;
+                ResetPointStats(i);
+                continue;
             }
+
+            if (CPList[i].ControllingTeam == None)
+                continue;
+
+            TeamIndex = CPList[i].ControllingTeam.TeamIndex;
+
+            if (TeamIndex == 0)
+                PointStats[i].RedTime += DeltaTime;
+            else if (TeamIndex == 1)
+                PointStats[i].BlueTime += DeltaTime;
         }
     }
 }
 
 simulated function PostRender(Canvas Canvas)
 {
-    // Toate variabilele de dimensiune si pozitie TREBUIE sa fie float
     local float TotalTime, RedRatio, BarWidth, BarHeight, BarX, CurrentPosY;
     local float ScaleRatio, CurrentHUDScale, ResScale;
-    local int i; // Singura variabila int ramane indexul i
+    local int i;
     local string RedPct, BluePct;
     local ChallengeHUD CHUD;
 
-    if (!bShowDOMHUD || Canvas == None) return;
+    if (Canvas == None || Canvas.Viewport == None || Canvas.Viewport.Actor == None)
+        return;
 
-    // --- LOGICA DE SCALARE COMBINATA ---
+    if (!bShowDOMHUD)
+        return;
+
     CHUD = ChallengeHUD(Canvas.Viewport.Actor.myHUD);
     if (CHUD != None)
         CurrentHUDScale = CHUD.HUDScale;
@@ -114,63 +148,50 @@ simulated function PostRender(Canvas Canvas)
     ResScale = Canvas.ClipX / 1920.0;
     ScaleRatio = (CurrentHUDScale / 0.4) * ResScale;
 
-    // Calculam cat de mare e ecranul fata de 1920px (baza ta)
-    ResScale = Canvas.ClipX / 1920.0;
-
-    // Combinam ambele scale-uri:
-    // (CurrentHUDScale / 0.4) asigura ca la HUD Scale 0.4 avem marimea originala
-    // * ResScale asigura ca la 1920x1080 avem marimea originala
-    ScaleRatio = (CurrentHUDScale / 0.4) * ResScale;
-    // -----------------------------------
-
-    Canvas.Style = 1; 
+    Canvas.Style = 1;
     Canvas.bNoSmooth = True;
 
     if (MyFonts == None)
     {
         if (CHUD != None)
             MyFonts = CHUD.MyFonts;
-        
-        if (MyFonts == None) return;
+
+        if (MyFonts == None)
+            return;
     }
 
-    if (WhiteTex == None) WhiteTex = Texture'Engine.WhiteTexture';
+    if (WhiteTex == None)
+        WhiteTex = Texture'Engine.WhiteTexture';
 
-    // Toate dimensiunile si pozitiile folosesc acum ScaleRatio combinat
-    BarWidth = 7 * ScaleRatio; 
-    BarHeight = 33 * ScaleRatio; 
+    BarWidth = 7 * ScaleRatio;
+    BarHeight = 33 * ScaleRatio;
     BarX = 45 * ScaleRatio;
-    
-    // Fontul se scaleaza oricum nativ prin Canvas.ClipX in functia de mai jos
+
     Canvas.Font = MyFonts.GetStaticSmallFont(Canvas.ClipX);
 
     for (i = 0; i < NumPoints; i++)
     {
-        // Pozitionarea Y fata de marginea de jos (ClipY) scalata
-        if (i == 0) CurrentPosY = Canvas.ClipY - (397 * ScaleRatio); 
-        else if (i == 1) CurrentPosY = Canvas.ClipY - (313 * ScaleRatio); 
-        else if (i == 2) CurrentPosY = Canvas.ClipY - (229 * ScaleRatio); 
-        else CurrentPosY = Canvas.ClipY - (50 * ScaleRatio) - (i * 84 * ScaleRatio); 
+        if (i == 0) CurrentPosY = Canvas.ClipY - (397 * ScaleRatio);
+        else if (i == 1) CurrentPosY = Canvas.ClipY - (313 * ScaleRatio);
+        else if (i == 2) CurrentPosY = Canvas.ClipY - (229 * ScaleRatio);
+        else CurrentPosY = Canvas.ClipY - (50 * ScaleRatio) - (i * 84 * ScaleRatio);
 
         TotalTime = PointStats[i].RedTime + PointStats[i].BlueTime;
-        
-        // Desenare Bordura (Grosime 2px scalata vizual)
+
         Canvas.SetPos(BarX - ScaleRatio, CurrentPosY - ScaleRatio);
         Canvas.DrawColor.R = 255; Canvas.DrawColor.G = 255; Canvas.DrawColor.B = 255;
         Canvas.DrawRect(WhiteTex, BarWidth + (2 * ScaleRatio), BarHeight + (2 * ScaleRatio));
-        
-        // Fundal Bar
+
         Canvas.SetPos(BarX, CurrentPosY);
         Canvas.DrawColor.R = 40; Canvas.DrawColor.G = 40; Canvas.DrawColor.B = 40;
         Canvas.DrawRect(WhiteTex, BarWidth, BarHeight);
-        
-        if (TotalTime > 0)
+
+        if (TotalTime > 0.0)
         {
             RedRatio = PointStats[i].RedTime / TotalTime;
-            BluePct = int((1.0 - RedRatio) * 100) $ "%";
-            RedPct = int(RedRatio * 100) $ "%";
+            BluePct = int((1.0 - RedRatio) * 100.0) $ "%";
+            RedPct = int(RedRatio * 100.0) $ "%";
 
-            // Desenare segmente echipe
             Canvas.SetPos(BarX, CurrentPosY);
             Canvas.DrawColor.R = 0; Canvas.DrawColor.G = 255; Canvas.DrawColor.B = 255;
             Canvas.DrawRect(WhiteTex, BarWidth, BarHeight * (1.0 - RedRatio));
@@ -179,9 +200,8 @@ simulated function PostRender(Canvas Canvas)
             Canvas.DrawColor.R = 255; Canvas.DrawColor.G = 0; Canvas.DrawColor.B = 0;
             Canvas.DrawRect(WhiteTex, BarWidth, BarHeight * RedRatio);
 
-            // Textul se muta si el in functie de noile dimensiuni
             Canvas.DrawColor.R = 0; Canvas.DrawColor.G = 255; Canvas.DrawColor.B = 255;
-            Canvas.SetPos(BarX + BarWidth + (5 * ScaleRatio), CurrentPosY + (BarHeight * (1.0 - RedRatio)) / 2 - (5 * ScaleRatio)); 
+            Canvas.SetPos(BarX + BarWidth + (5 * ScaleRatio), CurrentPosY + (BarHeight * (1.0 - RedRatio)) / 2 - (5 * ScaleRatio));
             Canvas.DrawText(BluePct, false);
 
             Canvas.DrawColor.R = 255; Canvas.DrawColor.G = 0; Canvas.DrawColor.B = 0;
